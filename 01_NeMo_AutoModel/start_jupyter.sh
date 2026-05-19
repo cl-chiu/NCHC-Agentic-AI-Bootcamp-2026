@@ -61,11 +61,7 @@ echo -n "▶ 等待 JupyterLab 起來"
 for _ in $(seq 1 60); do
     if curl -fs "http://localhost:${PORT}/lab" >/dev/null 2>&1; then
         echo
-        echo
-        echo "✅ JupyterLab 已就緒：http://${VM_IP}:${PORT}/lab"
-        echo "   （若 ${VM_IP} 是 VM 的私有/內部 IP，請改用對應的浮動/公開 IP，或用 ssh -L 8888:localhost:8888 做 port forwarding）"
-        echo
-        echo "   預設的 'Python 3 (ipykernel)' kernel 已指向 /opt/venv/bin/python，可直接 import nemo_automodel"
+        echo "✅ JupyterLab 已就緒：http://localhost:${PORT}"
         echo
         echo "   停止環境並釋放磁碟：./stop_jupyter.sh"
         exit 0
