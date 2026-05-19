@@ -30,7 +30,7 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-echo "[1/11] Install basic packages"
+echo "[1/10] Install basic packages"
 apt update
 apt install -y ca-certificates curl gnupg lsb-release wget rsync sshpass e2fsprogs
 
@@ -104,7 +104,7 @@ mount -a
 mkdir -p "${DOCKER_DATA_ROOT}" "${MODEL_DIR}" "${NIM_CACHE_DIR}"
 chown -R "${DEFAULT_USER}:${DEFAULT_USER}" "${DATA_MOUNT}"
 
-echo "[3/11] Install Docker"
+echo "[3/10] Install Docker"
 
 install -m 0755 -d /etc/apt/keyrings
 
@@ -127,7 +127,7 @@ apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker
 
 systemctl enable --now docker
 
-echo "[4/11] Configure Docker data-root and insecure registry"
+echo "[4/10] Configure Docker data-root and insecure registry"
 
 mkdir -p /etc/docker
 
@@ -145,7 +145,7 @@ usermod -aG docker "${DEFAULT_USER}" || true
 echo "[INFO] Docker root dir:"
 docker info | grep "Docker Root Dir" || true
 
-echo "[5/11] Install NVIDIA driver / nvidia-smi"
+echo "[5/10] Install NVIDIA driver / nvidia-smi"
 
 apt update
 apt install -y "linux-headers-$(uname -r)" || apt install -y linux-headers-generic
@@ -159,7 +159,7 @@ dpkg -i /tmp/cuda-keyring_1.1-1_all.deb
 apt update
 apt install -y cuda-drivers
 
-echo "[6/11] Install NVIDIA Container Toolkit"
+echo "[6/10] Install NVIDIA Container Toolkit"
 
 apt-get update
 apt-get install -y ca-certificates curl gnupg2
@@ -177,7 +177,7 @@ apt-get install -y nvidia-container-toolkit
 nvidia-ctk runtime configure --runtime=docker
 systemctl restart docker
 
-echo "[7/101] Rsync ~/nvidia from bastion to ${MODEL_DIR}"
+echo "[7/10] Rsync ~/nvidia from bastion to ${MODEL_DIR}"
 
 sshpass -p "${BASTION_PASS}" rsync -avz \
   -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
@@ -186,28 +186,13 @@ sshpass -p "${BASTION_PASS}" rsync -avz \
 
 chown -R "${DEFAULT_USER}:${DEFAULT_USER}" "${MODEL_DIR}"
 
-echo "[8/11] Rsync nim cache from bastion to ${NIM_CACHE_DIR}"
-
-mkdir -p "${NIM_CACHE_DIR}"
-
-sshpass -p "${BASTION_PASS}" rsync -avz \
-  -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-  "${BASTION_USER}@${BASTION_IP}:/home/nvbootcamp/.cache/nim/" \
-  "${NIM_CACHE_DIR}/"
-
-chown -R "${DEFAULT_USER}:${DEFAULT_USER}" "${CACHE_DIR}"
-
-echo "[9/11] Create ~/nvidia and ~/.cache symlinks to data disk"
+echo "[8/10] Create ~/nvidia symlinks to data disk"
 
 rm -rf "${DEFAULT_HOME}/nvidia"
 ln -s "${MODEL_DIR}" "${DEFAULT_HOME}/nvidia"
 chown -h "${DEFAULT_USER}:${DEFAULT_USER}" "${DEFAULT_HOME}/nvidia"
 
-rm -rf "${DEFAULT_HOME}/.cache"
-ln -s "${CACHE_DIR}" "${DEFAULT_HOME}/.cache"
-chown -h "${DEFAULT_USER}:${DEFAULT_USER}" "${DEFAULT_HOME}/.cache"
-
-echo "[10/11] Pull images from internal registry and retag clean names"
+echo "[9/10] Pull images from internal registry and retag clean names"
 
 docker pull "${VLLM_INTERNAL_IMAGE}"
 docker tag "${VLLM_INTERNAL_IMAGE}" "${VLLM_CLEAN_IMAGE}"
@@ -217,11 +202,10 @@ docker pull "${NEMO_AUTOMODEL_INTERNAL_IMAGE}"
 docker tag "${NEMO_AUTOMODEL_INTERNAL_IMAGE}" "${NEMO_AUTOMODEL_CLEAN_IMAGE}"
 docker rmi "${NEMO_AUTOMODEL_INTERNAL_IMAGE}" || true
 
-echo "[11/11] Install uv"
+echo "[10/10] Install uv"
 
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source "$HOME/.local/bin/env"
-
 
 echo "[INFO] Docker images:"
 docker image ls
