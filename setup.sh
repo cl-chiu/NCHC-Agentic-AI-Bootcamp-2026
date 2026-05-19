@@ -7,11 +7,18 @@ BASTION_IP="10.1.1.81"
 BASTION_USER="nvbootcamp"
 BASTION_PASS="nvbootcamp2026"
 REGISTRY="${BASTION_IP}:5000"
-VLLM_IMAGE="${REGISTRY}/vllm/vllm-openai:v0.21.0-ubuntu2404"
+
+VLLM_INTERNAL_IMAGE="${REGISTRY}/vllm/vllm-openai:v0.21.0-ubuntu2404"
+VLLM_CLEAN_IMAGE="vllm/vllm-openai:v0.21.0-ubuntu2404"
+
+NEMO_AUTOMODEL_INTERNAL_IMAGE="${REGISTRY}/nvcr.io/nvidia/nemo-automodel:26.04"
+NEMO_AUTOMODEL_CLEAN_IMAGE="nvcr.io/nvidia/nemo-automodel:26.04"
 
 DATA_MOUNT="/data"
 DOCKER_DATA_ROOT="${DATA_MOUNT}/docker"
 MODEL_DIR="${DATA_MOUNT}/nvidia"
+CACHE_DIR="${DATA_MOUNT}/.cache"
+NIM_CACHE_DIR="${CACHE_DIR}/nim"
 
 DEFAULT_USER="$(getent passwd 1000 | cut -d: -f1 || true)"
 DEFAULT_HOME="$(getent passwd 1000 | cut -d: -f6 || true)"
@@ -23,11 +30,11 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-echo "[1/9] Install basic packages"
+echo "[1/10] Install basic packages"
 apt update
 apt install -y ca-certificates curl gnupg lsb-release wget rsync sshpass e2fsprogs
 
-echo "[2/9] Detect and mount empty data disk"
+echo "[2/10] Detect and mount empty data disk"
 
 ROOT_SRC="$(findmnt -n -o SOURCE / || true)"
 ROOT_PARENT="$(lsblk -no PKNAME "${ROOT_SRC}" 2>/dev/null | head -n1 || true)"
@@ -71,7 +78,6 @@ while read -r DISK TYPE; do
 
   DATA_DISK="${DISK}"
   break
-
 done < <(lsblk -dpn -o NAME,TYPE)
 
 if [ -z "${DATA_DISK}" ]; then
@@ -95,10 +101,11 @@ fi
 
 mount -a
 
-mkdir -p "${DOCKER_DATA_ROOT}" "${MODEL_DIR}"
+mkdir -p "${DOCKER_DATA_ROOT}" "${MODEL_DIR}" "${NIM_CACHE_DIR}"
 chown -R "${DEFAULT_USER}:${DEFAULT_USER}" "${DATA_MOUNT}"
 
-echo "[3/9] Install Docker"
+echo "[3/10] Install Docker"
+
 install -m 0755 -d /etc/apt/keyrings
 
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
@@ -120,7 +127,7 @@ apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker
 
 systemctl enable --now docker
 
-echo "[4/9] Configure Docker data-root and insecure registry"
+echo "[4/10] Configure Docker data-root and insecure registry"
 
 mkdir -p /etc/docker
 
@@ -138,7 +145,8 @@ usermod -aG docker "${DEFAULT_USER}" || true
 echo "[INFO] Docker root dir:"
 docker info | grep "Docker Root Dir" || true
 
-echo "[5/9] Install NVIDIA driver / nvidia-smi"
+echo "[5/10] Install NVIDIA driver / nvidia-smi"
+
 apt update
 apt install -y "linux-headers-$(uname -r)" || apt install -y linux-headers-generic
 
@@ -151,7 +159,8 @@ dpkg -i /tmp/cuda-keyring_1.1-1_all.deb
 apt update
 apt install -y cuda-drivers
 
-echo "[6/9] Install NVIDIA Container Toolkit"
+echo "[6/10] Install NVIDIA Container Toolkit"
+
 apt-get update
 apt-get install -y ca-certificates curl gnupg2
 
@@ -168,7 +177,7 @@ apt-get install -y nvidia-container-toolkit
 nvidia-ctk runtime configure --runtime=docker
 systemctl restart docker
 
-echo "[7/9] Rsync ~/nvidia from bastion to ${MODEL_DIR}"
+echo "[7/10] Rsync ~/nvidia from bastion to ${MODEL_DIR}"
 
 sshpass -p "${BASTION_PASS}" rsync -avz \
   -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
@@ -177,20 +186,51 @@ sshpass -p "${BASTION_PASS}" rsync -avz \
 
 chown -R "${DEFAULT_USER}:${DEFAULT_USER}" "${MODEL_DIR}"
 
-echo "[8/9] Create ~/nvidia symlink to data disk"
+echo "[8/10] Rsync nim cache from bastion to ${NIM_CACHE_DIR}"
+
+mkdir -p "${NIM_CACHE_DIR}"
+
+sshpass -p "${BASTION_PASS}" rsync -avz \
+  -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+  "${BASTION_USER}@${BASTION_IP}:/home/nvbootcamp/.cache/nim/" \
+  "${NIM_CACHE_DIR}/"
+
+chown -R "${DEFAULT_USER}:${DEFAULT_USER}" "${CACHE_DIR}"
+
+echo "[9/10] Create ~/nvidia and ~/.cache symlinks to data disk"
 
 rm -rf "${DEFAULT_HOME}/nvidia"
 ln -s "${MODEL_DIR}" "${DEFAULT_HOME}/nvidia"
 chown -h "${DEFAULT_USER}:${DEFAULT_USER}" "${DEFAULT_HOME}/nvidia"
 
-echo "[9/9] Pull vLLM image from internal registry"
+rm -rf "${DEFAULT_HOME}/.cache"
+ln -s "${CACHE_DIR}" "${DEFAULT_HOME}/.cache"
+chown -h "${DEFAULT_USER}:${DEFAULT_USER}" "${DEFAULT_HOME}/.cache"
 
-docker pull "${VLLM_IMAGE}"
+echo "[10/10] Pull images from internal registry and retag clean names"
+
+docker pull "${VLLM_INTERNAL_IMAGE}"
+docker tag "${VLLM_INTERNAL_IMAGE}" "${VLLM_CLEAN_IMAGE}"
+docker rmi "${VLLM_INTERNAL_IMAGE}" || true
+
+docker pull "${NEMO_AUTOMODEL_INTERNAL_IMAGE}"
+docker tag "${NEMO_AUTOMODEL_INTERNAL_IMAGE}" "${NEMO_AUTOMODEL_CLEAN_IMAGE}"
+docker rmi "${NEMO_AUTOMODEL_INTERNAL_IMAGE}" || true
+
+echo "[INFO] Docker images:"
+docker image ls
 
 echo "[INFO] Disk usage:"
 df -h
 du -sh "${DOCKER_DATA_ROOT}" || true
 du -sh "${MODEL_DIR}" || true
+du -sh "${CACHE_DIR}" || true
+du -sh "${NIM_CACHE_DIR}" || true
+
+echo "[INFO] Symlink check:"
+ls -la "${DEFAULT_HOME}" | grep -E "nvidia|.cache" || true
+ls -la "${DEFAULT_HOME}/.cache" || true
+ls -la "${DEFAULT_HOME}/.cache/nim" || true
 
 echo "[DONE] Init finished. Rebooting for NVIDIA driver to take effect."
 reboot

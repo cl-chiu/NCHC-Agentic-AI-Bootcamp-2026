@@ -47,7 +47,7 @@ export NVIDIA_API_KEY=nvapi-xxx   # 換成講師提供的 key
 ### 3 — 啟動 Jupyter
 
 ```bash
-uv run jupyter lab
+uv run jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
 ```
 
 `uv run` 會在專案的 virtual environment 內執行指令——不必手動切換 kernel。
