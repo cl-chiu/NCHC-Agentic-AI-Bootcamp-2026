@@ -3,12 +3,13 @@ set -euo pipefail
 
 exec > >(tee -a /var/log/nvbootcamp-init-2.log) 2>&1
 
-
 BASTION_IP="10.1.1.81"
 BASTION_USER="nvbootcamp"
 BASTION_PASS="nvbootcamp2026"
 REGISTRY="${BASTION_IP}:5000"
 
+
+DEFAULT_USER="ubuntu"
 DEFAULT_HOME="/home/ubuntu"
 DATA_MOUNT="/data"
 CACHE_DIR="${DATA_MOUNT}/.cache"
