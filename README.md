@@ -265,7 +265,6 @@ git clone https://github.com/cl-chiu/NCHC-Agentic-AI-Bootcamp-2026.git
 
 ```bash
 cd NCHC-Agentic-AI-Bootcamp-2026
-
 sudo bash setup.sh
 ```
 
