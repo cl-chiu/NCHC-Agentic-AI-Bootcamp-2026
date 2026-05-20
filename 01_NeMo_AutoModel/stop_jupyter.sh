@@ -11,9 +11,6 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER}\$"; then
     echo "▶ 停止並移除 container ${CONTAINER}"
     docker rm -f "$CONTAINER" >/dev/null
     echo "✅ container 已移除"
-    echo "▶ 移除 image ${IMAGE}"
-    docker rmi "$IMAGE" >/dev/null
-    echo "✅ image 已移除（釋放 ~41 GB）"
 else
     echo "（container ${CONTAINER} 不存在，略過）"
 fi
