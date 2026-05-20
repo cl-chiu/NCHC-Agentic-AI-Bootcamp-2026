@@ -39,7 +39,7 @@ uv sync
 ### 2 — 設定 API key
 請至[Try NVIDIA NIM API](https://build.nvidia.com/)註冊帳號並申請API Key
 ```bash
-export NVIDIA_API_KEY=nvapi-xxx   # 換成講師提供的 key
+export NVIDIA_API_KEY=nvapi-xxx   # 換成自己申請的 key
 ```
 
 把這行加進你的 shell 設定（`~/.bashrc` 或 `~/.zshrc`）就不必每次重打。
