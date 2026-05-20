@@ -153,8 +153,6 @@
 
 填寫完成後點擊 **「確定」**。
 
-![建立虛擬磁碟](images/nchc-15-vm-disk.png)
-
 確認清單出現磁碟名稱與容量（200 GiB）後，點擊 **「下一步：認證 >」**。
 
 ![儲存資訊完成](images/nchc-16-vm-storage-done.png)
