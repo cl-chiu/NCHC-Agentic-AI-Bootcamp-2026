@@ -138,11 +138,15 @@ nemoclaw my-assistant token
 nemoclaw my-assistant connect
 ```
 
-進去後可以直接和 OpenClaw 對話：
+進去後啟動 OpenClaw 的 TUI 對話介面：
 
 ```bash
-openclaw agent --agent main --local -m "hello, who are you?" --session-id demo-001
+openclaw tui
 ```
+
+在 TUI 內直接打字即可。離開：先 `/exit` 離開 chat，再 `exit` 回到 host shell。
+
+> ⚠️ **不要用 `openclaw agent --local`** — 這個 flag 會繞過 sandbox 的 secret scanning / network policy / inference auth，NemoClaw 已經明確阻擋。Sandbox 內一律用 `openclaw tui`（互動）或從 host 端透過 dashboard。
 
 ---
 
@@ -246,6 +250,164 @@ nemoclaw my-assistant destroy
 
 ---
 
+## 6.5 Mini-demo：用 NemoClaw 做「只能看 public 帳本」的記帳助手
+
+這個 demo 展示 NemoClaw / OpenShell 最重要的安全特性：**sandbox 預設與 host 完全隔離**。我們在 host 上建兩份 CSV（public + private），只把 public 帶進 sandbox，然後從 sandbox 內驗證 private 那份**根本看不到**，最後請 agent 對 public 做分析。
+
+### Step 1 — 在 host 上建兩份假 CSV
+
+```bash
+# host shell（不是 sandbox 內）
+mkdir -p ~/budget-demo/public ~/budget-demo/private
+
+# Public：可以給 agent 看的日常消費
+cat > ~/budget-demo/public/transactions.csv <<'EOF'
+date,amount,merchant,category
+2026-05-02,-3200,房東,居住
+2026-05-03,-185,全聯,生活
+2026-05-05,-95,星巴克,餐飲
+2026-05-07,-1250,台電,居住
+2026-05-09,-420,Uber Eats,餐飲
+2026-05-11,-680,家樂福,生活
+2026-05-13,-95,星巴克,餐飲
+2026-05-15,-260,Spotify,訂閱
+2026-05-18,-1480,誠品,購物
+2026-05-21,-560,7-11,生活
+2026-05-25,-95,星巴克,餐飲
+2026-05-28,-340,計程車,通勤
+EOF
+
+# Private：薪資、投資、敏感金額 — 不希望 agent 看到
+cat > ~/budget-demo/private/salary_and_investments.csv <<'EOF'
+date,amount,source,note
+2026-05-10,85000,公司薪轉,月薪
+2026-05-10,-15000,XX證券,定期定額 0050
+2026-05-15,42000,XX銀行,股利
+2026-05-20,-200000,XX建設,房屋頭期款匯款
+EOF
+```
+
+### Step 2 — 進 sandbox，先確認 host isolation 有生效
+
+NemoClaw sandbox 預設不會看到 host 任何路徑 — 連我們剛建的 `~/budget-demo/` 都看不到。先驗證一下：
+
+```bash
+nemoclaw my-assistant connect
+```
+
+進到 sandbox 後（prompt 變 `sandbox@...$`）：
+
+```bash
+# Sandbox 看不到 host 任何路徑 ✅
+ls ~/budget-demo/ 2>&1            #  → No such file or directory
+ls /host/ 2>&1                     #  → No such file or directory
+ls /home/ubuntu/budget-demo 2>&1   #  → No such file or directory
+```
+
+這就是 OpenShell 的 filesystem isolation — 不用設 policy，sandbox 本來就看不到 host。
+
+### Step 3 — 把 public CSV 帶進 sandbox（但不帶 private）
+
+NemoClaw 提供 `share mount` 子命令，用 SSHFS 把 sandbox 的 `/sandbox` 雙向掛到 host：
+
+```bash
+# 開新的 host terminal（保留 sandbox shell 不要關）
+nemoclaw my-assistant share mount
+# 預設掛到 ~/.nemoclaw/mounts/my-assistant
+```
+
+掛好後，host 端寫到 mount point 的檔案會直接出現在 sandbox 內：
+
+```bash
+# 還在 host
+mkdir -p ~/.nemoclaw/mounts/my-assistant/budget
+cp ~/budget-demo/public/transactions.csv ~/.nemoclaw/mounts/my-assistant/budget/
+# 注意：~/budget-demo/private/ 完全沒碰，private CSV 不會進 sandbox
+```
+
+回到 sandbox shell 確認 public 已經進去、private 仍然看不到：
+
+```bash
+# sandbox 內
+ls /sandbox/budget/
+#  → transactions.csv
+
+# private 路徑依舊不存在
+ls /sandbox/private 2>&1     #  → No such file or directory
+```
+
+> 不想用 `share mount` 的話，最簡單的替代方案是直接在 sandbox 內用 `cat > transactions.csv <<EOF ... EOF` heredoc 重建檔案 — 同樣達到「只有 public 進 sandbox」的效果。
+
+### Step 4 — 用 OpenClaw TUI 請 agent 做分析
+
+```bash
+# 還在 sandbox 內
+openclaw tui
+```
+
+在 TUI 內輸入：
+
+```
+請讀 /sandbox/budget/transactions.csv：
+1. 把 category 分組，算出 5 月每組的總金額
+2. 算每組佔總支出的百分比
+3. 把報表寫到 /sandbox/budget/reports/2026-05.md
+```
+
+OpenClaw 會用 sandbox 內建的 Python 跑分析、寫出 markdown 報表。
+
+接著測一下 agent 真的看不到敏感資料 — 在 TUI 同一個對話內問：
+
+```
+我這個月薪資多少？股利收入多少？
+```
+
+預期：agent 回覆**找不到這些資料** — 因為從它的視角，這些檔案物理上不存在。這不是 prompt engineering 約束，是 sandbox 隔離。
+
+離開 TUI：`/exit`。
+
+### Step 5 — 把報表抓回 host 看
+
+因為 Step 3 已經 `share mount` 過了，sandbox 內寫到 `/sandbox/budget/reports/` 的報表會自動出現在 host：
+
+```bash
+# host 端
+cat ~/.nemoclaw/mounts/my-assistant/budget/reports/2026-05.md
+```
+
+完成後可以 unmount 跟 exit：
+
+```bash
+# host
+nemoclaw my-assistant share unmount
+
+# sandbox shell
+exit
+```
+
+✅ 完成 — agent 能對 public 做完整分析、寫報表、給建議，但 **物理上無法接觸 private 那份**（因為從未進 sandbox）。
+
+### 還能延伸
+
+| 想做的 | 怎麼做（已驗證指令） |
+|--------|--------|
+| 加一個 `/etc/hosts` alias 給 sandbox 用 | `nemoclaw my-assistant hosts-add searxng.local 192.168.1.105` |
+| 看 sandbox 目前有哪些 host aliases | `nemoclaw my-assistant hosts-list` |
+| 套用 NemoClaw 內建的 network policy preset | `nemoclaw my-assistant policy-add pypi --yes` |
+| 套用自訂 policy 檔 | `nemoclaw my-assistant policy-add --from-file ./my-policy.yaml` |
+| 看當前有哪些 policy presets 已套用 | `nemoclaw my-assistant policy-list` |
+| 把 sandbox 狀態打包 | `nemoclaw my-assistant snapshot create --name pre-experiment` |
+| 還原到某個 snapshot | `nemoclaw my-assistant snapshot restore <name-or-version>` |
+| 升級 agent 版本但保留 workspace | `nemoclaw my-assistant rebuild` |
+| 重啟 in-sandbox gateway（不開 SSH） | `nemoclaw my-assistant recover` |
+| 安裝一個 skill 進 sandbox | `nemoclaw my-assistant skill install ./my-skill/` |
+
+> 💡 NemoClaw `<name>` 的有效 actions（v0.0.41）：`connect`, `status`, `doctor`, `logs`, `policy-add/remove/list`, `hosts-add/list/remove`, `skill`, `snapshot`, `share`, `rebuild`, `recover`, `shields`, `config`, `channels`, `gateway-token`, `destroy`。**沒有** `restart` / `workspace`。要重啟用 `recover`（輕量）或 `rebuild`（升版本）。
+> `snapshot` / `share` / `skill` 都是 noun，需要 subcommand（例如 `snapshot create`、`share mount`、`skill install`）。
+> 完整參考：<https://docs.nvidia.com/nemoclaw/reference/commands>。
+
+---
+
 ## 7. 進階學習資源
 
 | 主題 | 路徑 / 連結 |
@@ -338,6 +500,8 @@ nemoclaw onboard
 | 在 Ubuntu 上 Ollama 解壓失敗 | 安裝 `zstd`：`sudo apt install zstd` |
 | `npm error code ECONNRESET` 安裝時斷線 | 見 9.1 — 調 npm timeout / 換 mirror |
 | `unresolvable CDI devices nvidia.com/gpu=all` | 見 9.2 — 安裝 NVIDIA Container Toolkit |
+| `Docker GPU patch failed: AMD CDI spec not found` | NemoClaw GPU patch 會找 AMD CDI，沒有就失敗。先 `openshell sandbox delete <name>`，再 `export NEMOCLAW_DOCKER_GPU_PATCH=0` 跳過 patch，重跑 `nemoclaw onboard`。NVIDIA GPU 還是會透過 CDI 正常 passthrough |
+| `'openclaw agent --local' is not supported inside NemoClaw sandboxes` | `--local` 會繞過 gateway 安全機制，預期會被擋。在 sandbox 內改用 `openclaw tui`（互動）或從 host 端用 dashboard / `nemoclaw <name> connect` |
 
 ### 9.1 npm `ECONNRESET` — 安裝 NemoClaw dependencies 時連線中斷
 
