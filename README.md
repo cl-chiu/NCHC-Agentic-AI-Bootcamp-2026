@@ -198,28 +198,6 @@
 
 建立後回到「虛擬機器管理」頁面，等待數分鐘，狀態由 `build` 變為 **`active`** 即表示 VM 已就緒。
 
-點擊 VM 名稱進入詳細頁面，後續步驟將在此取得**浮動 IP**。
-
-![VM 狀態 active](images/nchc-20-vm-active.png)
-
-進入 VM 詳細資料頁面，確認：
-- **狀態**：`active`
-- **登入帳號**：`ubuntu`
-
-在「虛擬網路資訊」區塊中，點擊 `bootcamp` 列右側的 **「⋮」** 按鈕，選擇 **「配置浮動 IP」**。
-
-![VM 詳細資料 — 配置浮動 IP](images/nchc-21-vm-detail.png)
-
-在「配置浮動 IP」對話框中選擇 **「自動配置浮動 IP」**，點擊 **「確定」**。
-
-![配置浮動 IP](images/nchc-22-vm-floating-ip.png)
-
-配置完成後，虛擬網路資訊欄位會顯示 **浮動 IP**（例如 `140.110.108.39`），此即為從外部 SSH 連線時使用的 IP。
-
-> ⚠️ **請記下或複製此浮動 IP**，下一步 SSH 連線時會需要用到。
-
-![浮動 IP 配置完成](images/nchc-23-vm-floating-ip-done.png)
-
 ### NCHC-12. SSH 連線至 VM
 
 **先在本機開啟 Terminal：**
@@ -232,21 +210,16 @@
 
 > Windows 10/11 內建的 PowerShell 與 cmd 均支援 `ssh` 指令，無需額外安裝。
 
-使用浮動 IP 從本機連線至 VM：
+
 
 ```bash
-ssh ubuntu@<浮動IP>
-```
-
-例如：
-
-```bash
-ssh ubuntu@140.110.108.39
-```
+ssh -J nvbootcamp@140.110.108.181 ubuntu@<內網IP>
+````
 
 輸入建立 VM 時設定的**密碼**即可登入。
 
-> 密碼：`NCHCbootcamp2026_`
+> 第一個密碼: `nvbootcamp2026`
+> 第二個密碼：`NCHCbootcamp2026_`
 
 
 ## 步驟 1｜下載本教學素材
