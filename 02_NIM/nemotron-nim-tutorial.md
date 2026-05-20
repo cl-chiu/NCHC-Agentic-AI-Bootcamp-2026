@@ -260,6 +260,10 @@ docker run -it --rm \
 使用 `uv` 管理 Python 環境（速度比 `pip` 快非常多）：
 
 ```bash
+# 安裝 uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source "$HOME/.local/bin/env"
+
 # 安裝 Python 3.12
 uv python install 3.12
 
