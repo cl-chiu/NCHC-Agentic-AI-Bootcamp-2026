@@ -24,7 +24,7 @@ docker run -d \
     --gpus all --ipc=host \
     --ulimit memlock=-1 --ulimit stack=67108864 \
     -v "$WORKSPACE":/workspace -w /workspace \
-    -v "/home/ubuntu/nvidia:/workspace/nvidia \
+    -v "/home/ubuntu/nvidia:/workspace/nvidia" \
     -p "${PORT}:8888" \
     -e HF_HOME=/workspace/.hf_cache \
     "$IMAGE" \
