@@ -11,12 +11,6 @@ CONTAINER="nchc-llm-workshop"
 PORT="${PORT:-8888}"
 WORKSPACE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 第一次使用時拉取 image
-if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    echo "▶ 第一次使用，拉取 $IMAGE（約 41 GB、首次需 20-30 分鐘）..."
-    echo "  如果是 NGC 私有映像需先 docker login nvcr.io"
-    docker pull "$IMAGE"
-fi
 
 # 移除先前殘留的同名 container
 if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER}\$"; then
@@ -61,7 +55,7 @@ echo -n "▶ 等待 JupyterLab 起來"
 for _ in $(seq 1 60); do
     if curl -fs "http://localhost:${PORT}/lab" >/dev/null 2>&1; then
         echo
-        echo "✅ JupyterLab 已就緒：http://localhost:${PORT}"
+        echo "✅ JupyterLab 已就緒：http://<Floating IP>:${PORT}"
         echo
         echo "   停止環境並釋放磁碟：./stop_jupyter.sh"
         exit 0
