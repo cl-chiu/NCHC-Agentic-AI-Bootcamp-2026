@@ -114,23 +114,7 @@ nemoclaw onboard
 
 ## 5. 與你的 Agent 互動
 
-### 5.1 透過瀏覽器 (Dashboard)
-
-安裝完成後 CLI 會顯示 dashboard URL，預設 port `18789`：
-
-```
-http://localhost:18789
-```
-
-取得登入 token：
-
-```bash
-nemoclaw my-assistant token
-```
-
-開啟瀏覽器，貼上 token，就能用 chat UI 跟 agent 對話。
-
-### 5.2 透過 Terminal
+### 5.１ 透過 Terminal
 
 連進 sandbox：
 
@@ -158,91 +142,47 @@ openclaw tui
 
 ```bash
 nemoclaw my-assistant status        # agent 狀態 / uptime / inference provider
-nemoclaw list                       # 列出所有 sandbox
 ```
 
 ### Demo 2 — 看 sandbox 內部的檔案
 
-OpenClaw 把 memory 寫成 plain Markdown，可以直接讀：
+OpenClaw 把它的狀態全部寫成本地檔案，可以直接 `ls` 進去看：
 
 ```bash
 nemoclaw my-assistant connect
 # 進去 sandbox 後：
-ls ~/.openclaw/memory/
-cat ~/.openclaw/memory/MEMORY.md
+ls ~/.openclaw/
 ```
 
-### Demo 3 — 換一個 inference provider
+預期看到的主要項目：
+
+| 項目 | 內容 |
+|------|------|
+| `openclaw.json` | agent 主設定（provider、model、tools 開關等） |
+| `agents/` | 已建立的 agent 定義 |
+| `skills/` | agent 可用的 skill |
+| `memory/` | agent 對話累積出的記憶（**剛建好是空的**，要跟 agent 聊過才會有內容） |
+| `logs/` | 歷次對話 / tool call 的紀錄 |
+| `credentials/` | 加密儲存的 provider API key |
+| `flows/`、`extensions/`、`canvas/` | 進階功能 |
+
+兩個最值得看的：
 
 ```bash
-nemoclaw my-assistant inference set --provider anthropic
-nemoclaw my-assistant inference test    # 跑一次 ping 驗證
+# 看 agent 現在連哪個 provider、用哪個 model
+cat ~/.openclaw/openclaw.json | head -40
+
+# 看最近一次對話的 log（跟 agent 聊過再來看）
+ls ~/.openclaw/logs/
 ```
 
-### Demo 4 — 啟動 / 停止 / 重啟
-
-```bash
-nemoclaw my-assistant stop
-nemoclaw my-assistant start
-nemoclaw my-assistant restart
-```
-
-### Demo 5 — 加一個 Skill（讓 agent 學新技能）
-
-OpenClaw 的 skill 是一個資料夾 + `SKILL.md`。範例：建立一個「今日 NASA APOD」skill。
-
-```bash
-nemoclaw my-assistant connect
-mkdir -p ~/.openclaw/skills/nasa-apod
-cat > ~/.openclaw/skills/nasa-apod/SKILL.md <<'EOF'
----
-name: nasa-apod
-description: Fetch NASA Astronomy Picture of the Day
----
-
-When the user asks about today's astronomy picture, call:
-
-    curl -s "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY"
-
-Return the title, explanation, and image URL.
-EOF
-```
-
-回到 chat 介面問：「What's today's NASA picture?」就會觸發這個 skill。
-
-### Demo 6 — 接 Messaging Channel（Telegram 範例）
-
-```bash
-nemoclaw my-assistant channels add telegram
-# 依提示輸入 Bot Token
-nemoclaw my-assistant channels list
-```
-
-設定完成後，從你的 Telegram bot 傳訊息就會被 agent 接收。
-
-### Demo 7 — 看 logs / 監控活動
+### Demo 3 — 看 logs
 
 ```bash
 nemoclaw my-assistant logs --tail 50
-nemoclaw my-assistant activity      # 顯示 sandbox 內近期 inference / tool calls
 ```
 
-### Demo 8 — Backup & Restore
-
-```bash
-nemoclaw my-assistant backup ./my-assistant-backup.tar.gz
-nemoclaw my-assistant restore ./my-assistant-backup.tar.gz
-```
-
-### Demo 9 — Network Policy（控管 agent 可以連哪些網域）
-
-```bash
-nemoclaw my-assistant policy show
-nemoclaw my-assistant policy allow-host api.openai.com
-nemoclaw my-assistant policy deny-host *.untrusted.com
-```
-
-### Demo 10 — 清掉 sandbox
+### Demo 4 — 清掉 sandbox
 
 ```bash
 nemoclaw my-assistant destroy
@@ -308,35 +248,37 @@ ls /home/ubuntu/budget-demo 2>&1   #  → No such file or directory
 
 ### Step 3 — 把 public CSV 帶進 sandbox（但不帶 private）
 
-NemoClaw 提供 `share mount` 子命令，用 SSHFS 把 sandbox 的 `/sandbox` 雙向掛到 host：
+最穩的做法：直接在 sandbox 內用 heredoc 重建 public CSV。不需要 mount、不會踩到路徑 probe 的雷。
 
 ```bash
-# 開新的 host terminal（保留 sandbox shell 不要關）
-nemoclaw my-assistant share mount
-# 預設掛到 ~/.nemoclaw/mounts/my-assistant
+# 還在 sandbox 內
+mkdir -p ~/budget && cd ~/budget
+
+cat > transactions.csv <<'EOF'
+date,amount,merchant,category
+2026-05-02,-3200,房東,居住
+2026-05-03,-185,全聯,生活
+2026-05-05,-95,星巴克,餐飲
+2026-05-07,-1250,台電,居住
+2026-05-09,-420,Uber Eats,餐飲
+2026-05-11,-680,家樂福,生活
+2026-05-13,-95,星巴克,餐飲
+2026-05-15,-260,Spotify,訂閱
+2026-05-18,-1480,誠品,購物
+2026-05-21,-560,7-11,生活
+2026-05-25,-95,星巴克,餐飲
+2026-05-28,-340,計程車,通勤
+EOF
 ```
 
-掛好後，host 端寫到 mount point 的檔案會直接出現在 sandbox 內：
+驗證：
 
 ```bash
-# 還在 host
-mkdir -p ~/.nemoclaw/mounts/my-assistant/budget
-cp ~/budget-demo/public/transactions.csv ~/.nemoclaw/mounts/my-assistant/budget/
-# 注意：~/budget-demo/private/ 完全沒碰，private CSV 不會進 sandbox
+ls ~/budget/                              # → transactions.csv
+ls ~/budget-demo/private 2>&1             # → No such file or directory
 ```
 
-回到 sandbox shell 確認 public 已經進去、private 仍然看不到：
-
-```bash
-# sandbox 內
-ls /sandbox/budget/
-#  → transactions.csv
-
-# private 路徑依舊不存在
-ls /sandbox/private 2>&1     #  → No such file or directory
-```
-
-> 不想用 `share mount` 的話，最簡單的替代方案是直接在 sandbox 內用 `cat > transactions.csv <<EOF ... EOF` heredoc 重建檔案 — 同樣達到「只有 public 進 sandbox」的效果。
+`private` 那份依然只在 host，sandbox 物理上接觸不到。
 
 ### Step 4 — 用 OpenClaw TUI 請 agent 做分析
 
@@ -348,10 +290,10 @@ openclaw tui
 在 TUI 內輸入：
 
 ```
-請讀 /sandbox/budget/transactions.csv：
+請讀 ~/budget/transactions.csv：
 1. 把 category 分組，算出 5 月每組的總金額
 2. 算每組佔總支出的百分比
-3. 把報表寫到 /sandbox/budget/reports/2026-05.md
+3. 把報表寫到 ~/budget/reports/2026-05.md
 ```
 
 OpenClaw 會用 sandbox 內建的 Python 跑分析、寫出 markdown 報表。
@@ -366,45 +308,23 @@ OpenClaw 會用 sandbox 內建的 Python 跑分析、寫出 markdown 報表。
 
 離開 TUI：`/exit`。
 
-### Step 5 — 把報表抓回 host 看
+### Step 5 — 看 agent 跑出的報表
 
-因為 Step 3 已經 `share mount` 過了，sandbox 內寫到 `/sandbox/budget/reports/` 的報表會自動出現在 host：
+在 sandbox 內直接 `cat` 看：
 
 ```bash
-# host 端
-cat ~/.nemoclaw/mounts/my-assistant/budget/reports/2026-05.md
+# 還在 sandbox 內（先 /exit 離開 TUI）
+cat ~/budget/reports/2026-05.md
 ```
 
-完成後可以 unmount 跟 exit：
+完成後退出 sandbox：
 
 ```bash
-# host
-nemoclaw my-assistant share unmount
-
-# sandbox shell
 exit
 ```
 
 ✅ 完成 — agent 能對 public 做完整分析、寫報表、給建議，但 **物理上無法接觸 private 那份**（因為從未進 sandbox）。
 
-### 還能延伸
-
-| 想做的 | 怎麼做（已驗證指令） |
-|--------|--------|
-| 加一個 `/etc/hosts` alias 給 sandbox 用 | `nemoclaw my-assistant hosts-add searxng.local 192.168.1.105` |
-| 看 sandbox 目前有哪些 host aliases | `nemoclaw my-assistant hosts-list` |
-| 套用 NemoClaw 內建的 network policy preset | `nemoclaw my-assistant policy-add pypi --yes` |
-| 套用自訂 policy 檔 | `nemoclaw my-assistant policy-add --from-file ./my-policy.yaml` |
-| 看當前有哪些 policy presets 已套用 | `nemoclaw my-assistant policy-list` |
-| 把 sandbox 狀態打包 | `nemoclaw my-assistant snapshot create --name pre-experiment` |
-| 還原到某個 snapshot | `nemoclaw my-assistant snapshot restore <name-or-version>` |
-| 升級 agent 版本但保留 workspace | `nemoclaw my-assistant rebuild` |
-| 重啟 in-sandbox gateway（不開 SSH） | `nemoclaw my-assistant recover` |
-| 安裝一個 skill 進 sandbox | `nemoclaw my-assistant skill install ./my-skill/` |
-
-> 💡 NemoClaw `<name>` 的有效 actions（v0.0.41）：`connect`, `status`, `doctor`, `logs`, `policy-add/remove/list`, `hosts-add/list/remove`, `skill`, `snapshot`, `share`, `rebuild`, `recover`, `shields`, `config`, `channels`, `gateway-token`, `destroy`。**沒有** `restart` / `workspace`。要重啟用 `recover`（輕量）或 `rebuild`（升版本）。
-> `snapshot` / `share` / `skill` 都是 noun，需要 subcommand（例如 `snapshot create`、`share mount`、`skill install`）。
-> 完整參考：<https://docs.nvidia.com/nemoclaw/reference/commands>。
 
 ---
 
