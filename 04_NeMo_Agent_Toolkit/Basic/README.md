@@ -24,6 +24,7 @@ AI agent workflow 建構工具。
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) — 安裝指令：
   ```bash
   curl -LsSf https://astral.sh/uv/install.sh | sh
+  source $HOME/.local/bin/env
   ```
 - Python 3.11 或 3.12（如果系統沒有，uv 會自動下載）
 
@@ -36,7 +37,7 @@ uv sync
 這一行會讀取 `pyproject.toml`、建立 `.venv/` 並把所有相依套件裝好。
 
 ### 2 — 設定 API key
-
+請至[Try NVIDIA NIM API](https://build.nvidia.com/)註冊帳號並申請API Key
 ```bash
 export NVIDIA_API_KEY=nvapi-xxx   # 換成講師提供的 key
 ```
@@ -47,8 +48,17 @@ export NVIDIA_API_KEY=nvapi-xxx   # 換成講師提供的 key
 ### 3 — 啟動 Jupyter
 
 ```bash
-uv run jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
+uv run jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --ServerApp.token='' --ServerApp.password=''
 ```
+如果有使用跳板機登入，須執行以下指令進行port forwarding
+```
+ssh -J nvbootcamp@140.110.108.181 \
+  -L 8888:localhost:8888 \
+  ubuntu@<Floating IP>
+```
+在瀏覽器輸入`localhost:8888` 即可進入jupyter lab
+
+若沒有跳板機，則直接輸入 `<Floating IP>:8888`
 
 `uv run` 會在專案的 virtual environment 內執行指令——不必手動切換 kernel。
 從 Jupyter 檔案瀏覽器打開教學 notebook 即可。
